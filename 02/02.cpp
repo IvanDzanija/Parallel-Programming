@@ -58,7 +58,7 @@ struct Board {
           break;
         }
       }
-      for (i32 i = 1; i < 4; ++i) {
+      for (i32 i = 1; i < 4 && std::make_pair(dr, dc) != std::make_pair(0, 1); ++i) {
         i32 rr = r - dr * i;
         i32 cc = c - dc * i;
         if (rr >= 0 && rr < ROWS && cc >= 0 && cc < COLS && grid[rr][cc] == player) {
