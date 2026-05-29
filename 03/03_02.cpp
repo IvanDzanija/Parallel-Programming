@@ -45,23 +45,7 @@ void NOTIFY_CONVENTION pfn_notify(const char *errinfo, const void *private_info,
   fprintf(stderr, "OpenCL Error (via pfn_notify): %s\n", errinfo);
 }
 
-const int LIMIT = 100000;
-std::vector<bool> is_prime(LIMIT + 1, true);
-
-void generate_primes() {
-  // Sieve
-  is_prime[0] = is_prime[1] = false;
-  for (int i = 2; i <= LIMIT; i++) {
-    if (is_prime[i] && (long long)i * i <= LIMIT) {
-      for (int j = i * i; j <= LIMIT; j += i) {
-        is_prime[j] = false;
-      }
-    }
-  }
-}
-
 int main(int argc, char **argv) {
-  generate_primes();
   // OpenCL setup
   // Find platform
   cl_platform_id platform;
@@ -102,37 +86,58 @@ int main(int argc, char **argv) {
 
   // Create kernel
   cl_kernel pi_kernel =
-      (cl_kernel)CL_CHECK_ERR(clCreateKernel(program, "count_primes_atomic", &_err));
+      (cl_kernel)CL_CHECK_ERR(clCreateKernel(program, "partial_pi", &_err));
+  cl_kernel sum_reduce_kernel =
+      (cl_kernel)CL_CHECK_ERR(clCreateKernel(program, "sum_reduction", &_err));
 
   // Events for measurement
   cl_event event_read;
   cl_event event_kernel;
 
+  // Config
+  const size_t L = 256;  // Threads per block
+  const size_t B = 256;  // Number of blocks
+  const size_t G = B * L;
+  const size_t global_work_size[1] = {G};
+  const size_t local_work_size[1] = {L};
+  const float zero = 0;
   const size_t N = (1 << 24);  // 2^20
-  int result = -1;
+  std::vector<float> results(B);
+  float result = 0;
 
   // Create buffers
-  // Result buffer (reduced to a single integer)
+  // Results buffer (each thread gets its own memory spot)
   cl_mem result_buffer = (cl_mem)CL_CHECK_ERR(
-      clCreateBuffer(context, CL_MEM_WRITE_ONLY, sizeof(int), NULL, &_err));
+      clCreateBuffer(context, CL_MEM_READ_WRITE, sizeof(float) * N, NULL, &_err));
+  cl_mem scan_buffer = (cl_mem)CL_CHECK_ERR(
+      clCreateBuffer(context, CL_MEM_READ_WRITE, sizeof(float) * N, NULL, &_err));
+  cl_mem block_sums_buffer = (cl_mem)CL_CHECK_ERR(
+      clCreateBuffer(context, CL_MEM_READ_WRITE, sizeof(float) * B, NULL, &_err));
 
   // Set kernel arguments
   CL_CHECK(clSetKernelArg(pi_kernel, 0, sizeof(int), &N));
   CL_CHECK(clSetKernelArg(pi_kernel, 1, sizeof(cl_mem), &result_buffer));
 
+  //__kernel void sum_reduction(__global const float *input, __global float *output,
+  //                            const int input_size, __local float *reduction_sums);
+  CL_CHECK(clSetKernelArg(sum_reduce_kernel, 0, sizeof(cl_mem), &result_buffer));
+  CL_CHECK(clSetKernelArg(sum_reduce_kernel, 1, sizeof(cl_mem), &block_sums_buffer));
+  CL_CHECK(clSetKernelArg(sum_reduce_kernel, 2, sizeof(int), &N));
+  CL_CHECK(clSetKernelArg(sum_reduce_kernel, 3, sizeof(float) * L, NULL));
+
   // Execute kernel and read result
-  size_t L = 256;  // Threads per block
-  size_t B = 256;  // Number of blocks
-  size_t G = B * L;
-  size_t global_work_size[1] = {G};
-  size_t local_work_size[1] = {L};
-  int zero = 0;
-  CL_CHECK(clEnqueueWriteBuffer(queue, result_buffer, CL_TRUE, 0, sizeof(int), &zero, 0,
-                                NULL, NULL));
+  CL_CHECK(clEnqueueWriteBuffer(queue, result_buffer, CL_TRUE, 0, sizeof(float), &zero,
+                                0, NULL, NULL));
   CL_CHECK(clEnqueueNDRangeKernel(queue, pi_kernel, 1, NULL, global_work_size,
                                   local_work_size, 0, NULL, &event_kernel));
-  CL_CHECK(clEnqueueReadBuffer(queue, result_buffer, CL_TRUE, 0, sizeof(int), &result,
-                               0, NULL, &event_read));
+  CL_CHECK(clEnqueueNDRangeKernel(queue, sum_reduce_kernel, 1, NULL, global_work_size,
+                                  local_work_size, 0, NULL, NULL));
+  CL_CHECK(clEnqueueReadBuffer(queue, block_sums_buffer, CL_TRUE, 0, sizeof(float) * B,
+                               results.data(), 0, NULL, &event_read));
+
+  for (size_t i = 0; i < B; ++i) {
+    result += results[i];
+  }
 
   // Asynchronous finish
   CL_CHECK(clFinish(queue));
@@ -155,40 +160,33 @@ int main(int argc, char **argv) {
                           NULL);
   time_read += (double)(end - start) * 1e-6;
 
-  printf("\nConfiguration: L = %zu, B = %zu\n", L, B);
-  printf("--- PROFILIRANJE (ATOMIC) ---\n");
-  printf("Prijenos RAM -> GPU: %f ms\n", time_write);
-  printf("Izvodenje (Kernel):  %f ms\n", atomic_time_kernel);
-  printf("Prijenos GPU -> RAM: %f ms\n", atomic_time_read);
-  printf("Ukupno (bez setupa): %f ms\n",
-         time_write + atomic_time_kernel + atomic_time_read);
+  printf("Configuration: L = %zu, B = %zu\n", L, B);
+  printf("--- PROFILIRANJE ---\n");
+  printf("Izvodenje (Kernel):  %f ms\n", time_kernel);
+  printf("Prijenos GPU -> RAM: %f ms\n", time_read);
+  printf("Ukupno (bez setupa): %f ms\n", time_kernel + time_read);
+  printf("Pi approximation: %.10f\n", result * 4 / N);
 
-  int cpu_count = 0;
+  double res = 0.0F;
+  clock_t start_cpu = clock();
   for (size_t i = 0; i < N; ++i) {
-    if (is_prime[input[i]]) {
-      ++cpu_count;
-    }
-  }
-  if (cpu_count != atomic_result) {
-    fprintf(stderr, "Atomic kernel result mismatch! CPU: %d, GPU: %d\n", cpu_count,
-            atomic_result);
-  } else {
-    printf("Atomic kernel result matches CPU count: %d\n", atomic_result);
-  }
-  if (cpu_count != non_atomic_result) {
-    fprintf(stderr, "Non-atomic kernel result mismatch! CPU: %d, GPU: %d\n", cpu_count,
-            non_atomic_result);
-  } else {
-    printf("Non-atomic kernel result matches CPU count: %d\n", non_atomic_result);
+    double current = ((i - 0.5) / N) * ((i - 0.5) / N);
+    res += 1.0 / (1.0 + current);
   }
 
+  res *= 4.0F / N;
+  clock_t end_cpu = clock();
+  double cpu_time = (double)(end_cpu - start_cpu) * 1e3 / CLOCKS_PER_SEC;
+  printf("CPU Pi approximation: %.10f\n", res);
+  printf("CPU time: %f ms\n", cpu_time);
+
   // Cleanup
-  CL_CHECK(clReleaseMemObject(input_buffer));
   CL_CHECK(clReleaseMemObject(result_buffer));
+  CL_CHECK(clReleaseMemObject(scan_buffer));
+  CL_CHECK(clReleaseMemObject(block_sums_buffer));
 
   // Cleanup
-  CL_CHECK(clReleaseKernel(atomic_kernel));
-  CL_CHECK(clReleaseKernel(non_atomic_kernel));
+  CL_CHECK(clReleaseKernel(pi_kernel));
   CL_CHECK(clReleaseProgram(program));
   CL_CHECK(clReleaseContext(context));
   CL_CHECK(clReleaseCommandQueue(queue));
