@@ -1,1 +1,1 @@
-double gettime(void);
+float gettime(void);

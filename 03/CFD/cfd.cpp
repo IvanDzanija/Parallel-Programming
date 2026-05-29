@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include <stdlib.h>
+#include <time.h>
 
 #include <cmath>
 #include <vector>
@@ -14,7 +15,7 @@
 
 int main(int argc, char **argv) {
   static constexpr int printfreq = 1000;  // output frequency
-  double tolerance = 0.0;  // tolerance for convergence. <=0 means do not check
+  float tolerance = 0.0;  // tolerance for convergence. <=0 means do not check
 
   // command line arguments
   int scalefactor, numiter;
@@ -61,15 +62,15 @@ int main(int argc, char **argv) {
   printf("Running CFD on %d x %d grid in serial\n", m, n);
 
   // main arrays
-  std::vector<double> psi((m + 2) * (n + 2), 0.0);
+  std::vector<float> psi((m + 2) * (n + 2), 0.0F);
   // temporary versions of main arrays
-  std::vector<double> psitmp((m + 2) * (n + 2), 0.0);
+  std::vector<float> psitmp((m + 2) * (n + 2), 0.0F);
 
   // set the psi boundary conditions
   boundarypsi(psi.data(), m, n, b, h, w);
 
   // compute normalisation factor for error
-  double bnorm = 0.0;
+  float bnorm = 0.0;
 
   for (size_t i = 0; i < m + 2; ++i) {
     for (size_t j = 0; j < n + 2; ++j) {
@@ -81,7 +82,8 @@ int main(int argc, char **argv) {
   // begin iterative Jacobi loop
   double error;
   printf("\nStarting main loop...\n\n");
-  double tstart = gettime();
+  struct timespec start_host, end_host;
+  clock_gettime(CLOCK_MONOTONIC, &start_host);
 
   size_t iter = 1;
   for (; iter <= numiter; ++iter) {
@@ -125,8 +127,14 @@ int main(int argc, char **argv) {
     iter = numiter;
   }
 
-  double tstop = gettime();
-  double ttot = tstop - tstart;
+  clock_gettime(CLOCK_MONOTONIC, &end_host);
+
+  // Izračun ukupnog vremena u milisekundama
+  double ttot_ms = (end_host.tv_sec - start_host.tv_sec) * 1e3 +
+                   (end_host.tv_nsec - start_host.tv_nsec) * 1e-6;
+
+  // Pretvorba u sekunde za krajnji ispis
+  double ttot = ttot_ms / 1000.0;
 
   // print out some stats
   printf("\n... finished\n");

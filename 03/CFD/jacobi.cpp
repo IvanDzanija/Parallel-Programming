@@ -1,6 +1,6 @@
 #include "jacobi.h"
 
-void jacobistep(double *psinew, double *psi, int m, int n) {
+void jacobistep(float *psinew, float *psi, int m, int n) {
   for (int i = 1; i <= m; i++) {
     for (int j = 1; j <= n; j++) {
       psinew[i * (m + 2) + j] =
@@ -10,9 +10,9 @@ void jacobistep(double *psinew, double *psi, int m, int n) {
   }
 }
 
-double deltasq(double *newarr, double *oldarr, int m, int n) {
-  double dsq = 0.0;
-  double tmp;
+float deltasq(float *newarr, float *oldarr, int m, int n) {
+  float dsq = 0.0;
+  float tmp;
 
   for (int i = 1; i <= m; i++) {
     for (int j = 1; j <= n; j++) {

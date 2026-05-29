@@ -1,4 +1,4 @@
-__kernel void jacobi_kernel(__global double *psinew, __global const double *psi,
+__kernel void jacobi_kernel(__global float *psinew, __global const float *psi,
                             const int m, const int n) {
   int i = get_global_id(0) + 1;
   int j = get_global_id(1) + 1;
