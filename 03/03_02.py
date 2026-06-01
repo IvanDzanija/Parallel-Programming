@@ -1,8 +1,10 @@
 import numpy as np
 import time
+import numba
 from numba import guvectorize, vectorize, float64, float32, int32
 
 N = 1 << 24
+print(numba.get_num_threads())
 
 
 # Pure python

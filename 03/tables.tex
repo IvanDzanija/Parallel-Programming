@@ -1,0 +1,197 @@
+\documentclass[12pt,a4paper]{article}
+
+% --- Učitavanje paketa za jezik, fontove i matematiku ---
+\usepackage[utf8]{inputenc}
+\usepackage[croatian]{babel} % Prilagodba jezika (tablice, slike, naslovi)
+\usepackage[T1]{fontenc}
+\usepackage{lmodern}
+\usepackage{amsmath}
+\usepackage{amsfonts}
+\usepackage{amssymb}
+
+% --- Geometrija stranice i izgled ---
+\usepackage[margin=2.5cm]{geometry}
+\usepackage{booktabs}   % Za ljepše i profesionalnije tablice
+\usepackage{microtype}  % Poboljšava razmak između riječi i izgled teksta
+\usepackage{hyperref}   % Omogućuje klikabilne poveznice unutar PDF-a
+
+\hypersetup{
+    colorlinks=true,
+    linkcolor=blue,
+    filecolor=magenta,
+    urlcolor=cyan,
+    pdftitle={Laboratorijska vježba - Analiza performansi},
+    pdfpagemode=FullScreen,
+}
+
+% --- Početak dokumenta ---
+\begin{document}
+
+\title{\textbf{Laboratorijska vježba: Paralelno programiranje}}
+\author{\textbf{Ivan Džanija}}
+\date{\today}
+
+\maketitle
+\tableofcontents
+\newpage
+
+\section{Zadatak 3.1}
+U tablici \ref{tab:rezultati} prikazana su ukupna vremena izvršavanja
+(u ms) bez troškova inicijalizacije okruženja (\textit{setup overhead}).
+Vremena su zapisana za pojedinačno pokretanje te na kraju za konačni
+prosjek.
+
+\begin{table}[h!]
+\centering
+\caption{Usporedba ukupnog vremena izvršavanja (ms)
+  za atomičku verziju kernela ($N = 2^{24}$)}
+\label{tab:rezultati}
+\vspace{0.3cm}
+\begin{tabular}{ccccccc}
+\toprule
+  \textbf{L} & \textbf{B} & \textbf{G} & \textbf{T1 (ms)} &
+  \textbf{T2 (ms)} & \textbf{T3 (ms)} &
+  \textbf{\textit{Prosjek} (ms)} \\
+\midrule
+32  & 16  & 512   & 5.067 & 5.271 & 5.513 & \textbf{5.284} \\
+32  & 32  & 1024  & 2.562 & 2.642 & 2.719 & \textbf{2.641} \\
+32  & 64  & 2048  & 1.791 & 1.845 & 1.909 & \textbf{1.848} \\
+32  & 128 & 4096  & 1.374 & 1.412 & 1.495 & \textbf{1.427} \\
+32  & 256 & 8192  & 1.398 & 1.496 & 1.582 & \textbf{1.492} \\
+\midrule
+64  & 16  & 1024  & 2.549 & 2.797 & 2.864 & \textbf{2.737} \\
+64  & 32  & 2048  & 1.789 & 1.948 & 1.753 & \textbf{1.830} \\
+64  & 64  & 4096  & 1.369 & 1.480 & 1.414 & \textbf{1.421} \\
+64  & 128 & 8192  & 1.378 & 1.505 & 1.541 & \textbf{1.475} \\
+64  & 256 & 16384 & 1.298 & 1.441 & 1.434 & \textbf{1.391} \\
+\midrule
+128 & 16  & 2048  & 2.008 & 2.188 & 2.194 & \textbf{2.130} \\
+128 & 32  & 4096  & 1.249 & 1.414 & 1.399 & \textbf{1.354} \\
+128 & 64  & 8192  & 1.323 & 1.581 & 1.457 & \textbf{1.454} \\
+128 & 128 & 16384 & 1.261 & 1.333 & 1.415 & \textbf{1.336} \\
+128 & 256 & 32768 & 1.247 & 1.396 & 1.393 & \textbf{1.345} \\
+\midrule
+256 & 16  & 4096  & 1.795 & 1.463 & 1.891 & \textbf{1.716} \\
+256 & 32  & 8192  & 1.331 & 1.435 & 1.456 & \textbf{1.407} \\
+256 & 64  & 16384 & 1.276 & 1.503 & 1.482 & \textbf{1.420} \\
+256 & 128 & 32768 & 1.259 & 1.313 & 1.335 & \textbf{1.302} \\
+256 & 256 & 65536 & 1.241 & 1.219 & 1.296 & \textbf{1.252} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\noindent Iz izmjerenih podataka uočava se kako se ukupna vremena izvršavanja
+kreću u rasponu od cca $1.25$ ms do $5.5$ ms.
+Ukupan broj dretvi $G = B \times L$ ima najznačajniji utjecaj na
+performanse --- povećanjem $G$ vrijeme izvršavanja se smanjuje sve do
+zasićenja oko $G \approx 4096$, nakon čega daljnje povećanje broja dretvi
+donosi zanemarivo poboljšanje zbog ograničenja propusnosti memorije i
+kontencije na atomičkom brojaču.
+
+% ---------------------------------------------------------------
+\section{Zadatak 3.2}
+
+Implementiran je izračun broja $\pi$ pomoću sume reda:
+\begin{equation}
+  \pi \approx \frac{4}{N} \sum_{i=0}^{N-1} \frac{1}{1 + \left(\frac{i - 0.5}{N}\right)^2}
+\end{equation}
+uz $N = 2^{24}$ elemenata. Implementirane su tri verzije:
+OpenCL kernel (GPU), Numba \texttt{@vectorize} te Numba
+\texttt{@guvectorize} s različitim veličinama bloka. Numba
+implementacije se pokreću na CPU-u koristeći sve dostupne jezgre (8).
+
+% --- GPU tablica ---
+\subsection{OpenCL kernel (GPU)}
+
+\begin{table}[ht]
+\centering
+\caption{Vremena izvršavanja OpenCL kernelske verzije ($N = 2^{24}$,
+         $L = 256$, $B = 256$)}
+\label{tab:gpu32}
+\vspace{0.3cm}
+\begin{tabular}{cccc}
+\toprule
+\textbf{Izvođenje} & \textbf{Kernel (ms)} &
+\textbf{Prijenos GPU\,$\to$\,RAM (ms)} & \textbf{Ukupno (ms)} \\
+\midrule
+1 & 0.045864 & 0.000147 & \textbf{0.046011} \\
+2 & 0.045865 & 0.000159 & \textbf{0.046024} \\
+3 & 0.045865 & 0.000161 & \textbf{0.046026} \\
+\midrule
+Prosjek & 0.045865 & 0.000156 & \textbf{0.046020} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+% --- Numba tablica ---
+\subsection{Numba: Single Core, Vectorize i GUVectorize}
+
+Sva vremena izvršavanja prikazana su u tablici \ref{tab:numba32}.
+
+\begin{table}[ht]
+\centering
+\caption{Vremena izvršavanja Numba verzija ($N = 2^{24}$)}
+\label{tab:numba32}
+\vspace{0.3cm}
+\begin{tabular}{lccccc}
+\toprule
+\textbf{Verzija} &
+\textbf{T1 (ms)} & \textbf{T2 (ms)} &
+\textbf{T3 (ms)} & \textbf{Prosjek (ms)} \\
+\midrule
+Python (single core) & 1564.43 & 1572.69 & 1555.23 & \textbf{1564.12} \\
+\texttt{@vectorize} & 22.48 & 14.85 & 16.28 & \textbf{17.87} \\
+\midrule
+\texttt{@guvectorize} blok 1024 & 4.71 & 6.17 & 7.32 & \textbf{6.07} \\
+\texttt{@guvectorize} blok 2048 & 4.35 & 5.73 & 5.39 & \textbf{5.16} \\
+\texttt{@guvectorize} blok 4096 & 4.69 & 4.12 & 4.68 & \textbf{4.50} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\noindent Najbrža Numba verzija (\texttt{@guvectorize}, blok 4096,
+prosjek $\approx 4.5$ ms) usporediva je s OpenCL kernelom ($\approx
+0.046$ ms razlika je zbog različite platforme), dok čista Python (single core) verzija
+zaostaje za više od dva reda veličine.
+
+% ---------------------------------------------------------------
+\section{Zadatak 3.3}
+
+U ovome zadatku je paralelizirana simulacija dinamike fluida u 2D prostoru
+na mreži dimenzija $2048 \times 2048$ kroz $1000$ iteracija.
+Paraleliziran je Jacobijev algoritam jer za trenutnu iteraciju nema ovisnosti s trenutnim
+izračunima, već se koriste samo izračuni prethodne iteracije.
+
+
+\subsection{Rezultati mjerenja}
+Vrijednost konačne pogreške u oba je slučaja iznosila egzaktno \textbf{0.00125516},
+čime je potvrđen uvjet matematičke ispravnosti paralelne implementacije.
+
+\begin{table}[ht!]
+\centering
+\caption{Usporedba performansi sekvencijalnog izvođenja (CPU) i paralelne verzije (GPU) za CFD ($2048 \times 2048$, 1000 iteracija)}
+\label{tab:cfd_rezultati}
+\vspace{0.3cm}
+\begin{tabular}{lcccc}
+\toprule
+\textbf{Konfiguracija} & \textbf{T1 (ms)} & \textbf{T2 (ms)} & \textbf{T3 (ms)} & \textbf{\textit{Prosjek} (ms)} \\
+\midrule
+Sekvencijalno  & 23289.60 & 25716.30 & 23599.00 & \textbf{24201.63} \\
+Paralelno     & 1086.72  & 1148.92  & 1079.03  & \textbf{1104.89}  \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\noindent Ubrzanje je dano sljedećim izrazom:
+\begin{equation}
+    S = \frac{T_{serial}}{T_{parallel}} = \frac{24201.63 \text{ ms}}{1104.89 \text{ ms}} \approx \mathbf{21.90}
+\end{equation}
+
+\noindent Paralelna verzija programa ostvaruje iznimno visoko ubrzanje od \textbf{21.90 puta}
+u odnosu na sekvencijalnu izvedbu. Valja napomenuti da se potpuno izgubi svo značajno ubrzanje ako se
+koristi \textit{zastavica} \texttt{-O2} jer kompilator optimizira sekvencijalnu verziju ubacivanjem
+\textit{SIMD} instrukcija i trajanje izvođenja \textit{sekvencijalne} verzije pada na cca 1.2
+sekundi, što je usporedivo s paralelnom verzijom.
+
+
+\end{document}
