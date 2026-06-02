@@ -15,7 +15,7 @@ using u8 = uint8_t;
 static constexpr double DOUBLE_INF = std::numeric_limits<double>::infinity();
 static constexpr size_t ROWS = 6;
 static constexpr size_t COLS = 7;
-static constexpr size_t MIN_DEPTH = 10;
+static constexpr size_t MIN_DEPTH = 9;
 static constexpr size_t TASK_SPLIT_DEPTH = 3;  // 7^3 = 343
 
 // Game state enums
@@ -95,12 +95,13 @@ struct Board {
 
       if (r != -1) {
         ++moves;
-        grid[r][c] = (turn == Turn::COMPUTER) ? BoardCell::COMPUTER : BoardCell::HUMAN;
+        grid[r][c] = place_turn(turn);
         double res = evaluate(swap(turn), r, c, depth - 1);
         grid[r][c] = BoardCell::EMPTY;  // Undo move
         if (turn == Turn::COMPUTER && res == 1.F) {
           return 1.F;
-        } else if (turn == Turn::HUMAN && res == -1.F) {
+        }
+        if (turn == Turn::HUMAN && res == -1.F) {
           return -1.F;
         }
         sum += res;

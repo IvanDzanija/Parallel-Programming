@@ -42,59 +42,77 @@ struct Board {
                                                  : '.';
         std::cout << c << " ";
       }
-      std::cout << "\n";
+      std::cout << std::endl;
     }
-    std::cout << "0 1 2 3 4 5 6\n\n";
+    std::cout << "0 1 2 3 4 5 6" << std::endl;
+    std::cout << std::endl;
   }
 
   BoardCell find_winner(i32 r, i32 c) const {
     static constexpr std::array<std::pair<i8, i8>, 4> DIRECTIONS = {
         {{0, 1}, {1, 0}, {1, 1}, {1, -1}}};
     BoardCell player = grid[r][c];
-    if (player == BoardCell::EMPTY) return BoardCell::EMPTY;
+    if (player == BoardCell::EMPTY) {
+      return BoardCell::EMPTY;
+    }
+
     for (auto [dr, dc] : DIRECTIONS) {
       i32 count = 1;
       for (i32 i = 1; i < 4; ++i) {
         i32 rr = r + dr * i, cc = c + dc * i;
-        if (rr >= 0 && rr < (i32)ROWS && cc >= 0 && cc < (i32)COLS &&
-            grid[rr][cc] == player)
+        if (rr >= 0 && rr < ROWS && cc >= 0 && cc < COLS && grid[rr][cc] == player) {
           ++count;
-        else
+        } else {
           break;
+        }
       }
       for (i32 i = 1; i < 4; ++i) {
         i32 rr = r - dr * i, cc = c - dc * i;
-        if (rr >= 0 && rr < (i32)ROWS && cc >= 0 && cc < (i32)COLS &&
-            grid[rr][cc] == player)
+        if (rr >= 0 && rr < ROWS && cc >= 0 && cc < COLS && grid[rr][cc] == player) {
           ++count;
-        else
+        } else {
           break;
+        }
       }
-      if (count >= 4) return player;
+      if (count >= 4) {
+        return player;
+      }
     }
     return BoardCell::EMPTY;
   }
 
   double evaluate(Turn turn, i32 prev_r, i32 prev_c, i32 depth) {
     BoardCell winner = find_winner(prev_r, prev_c);
-    if (winner == BoardCell::HUMAN) return -1.0;
-    if (winner == BoardCell::COMPUTER) return 1.0;
-    if (depth == 0) return 0.0;
+    if (winner == BoardCell::HUMAN) {
+      return -1.0;
+    }
+    if (winner == BoardCell::COMPUTER) {
+      return 1.0;
+    }
+    if (depth == 0) {
+      return 0.0;
+    }
 
     double sum = 0.0;
     i32 moves = 0;
-    for (i32 c = 0; c < (i32)COLS; ++c) {
+    for (i32 c = 0; c < COLS; ++c) {
       i32 r = ROWS - 1;
       for (; r >= 0 && grid[r][c] != BoardCell::EMPTY; --r);
-      if (r == -1) continue;
+      if (r == -1) {
+        continue;
+      }
 
       ++moves;
       grid[r][c] = place_turn(turn);
       double res = evaluate(swap(turn), r, c, depth - 1);
       grid[r][c] = BoardCell::EMPTY;
 
-      if (turn == Turn::COMPUTER && res == 1.0) return 1.0;
-      if (turn == Turn::HUMAN && res == -1.0) return -1.0;
+      if (turn == Turn::COMPUTER && res == 1.0) {
+        return 1.0;
+      }
+      if (turn == Turn::HUMAN && res == -1.0) {
+        return -1.0;
+      }
       sum += res;
     }
     return moves == 0 ? 0.0 : sum / moves;
@@ -103,7 +121,7 @@ struct Board {
 
 std::optional<double> execute_task_by_id(i32 t_id, Board board) {
   i32 temp = t_id;
-  Turn cur = Turn::COMPUTER;
+  Turn curr = Turn::COMPUTER;
   i32 last_r = -1, last_c = -1;
 
   std::array<i32, TASK_SPLIT_DEPTH> moves{};
@@ -116,19 +134,25 @@ std::optional<double> execute_task_by_id(i32 t_id, Board board) {
     i32 c = moves[d];
     i32 r = ROWS - 1;
     for (; r >= 0 && board.grid[r][c] != BoardCell::EMPTY; --r);
-    if (r == -1) return std::nullopt;
+    if (r == -1) {
+      return std::nullopt;
+    }
 
-    board.grid[r][c] = place_turn(cur);
+    board.grid[r][c] = place_turn(curr);
     last_r = r;
     last_c = c;
 
     BoardCell winner = board.find_winner(r, c);
-    if (winner == BoardCell::COMPUTER) return 1.0;
-    if (winner == BoardCell::HUMAN) return -1.0;
-    cur = swap(cur);
+    if (winner == BoardCell::COMPUTER) {
+      return 1.0;
+    }
+    if (winner == BoardCell::HUMAN) {
+      return -1.0;
+    }
+    curr = swap(curr);
   }
 
-  return board.evaluate(cur, last_r, last_c, MIN_DEPTH - TASK_SPLIT_DEPTH);
+  return board.evaluate(curr, last_r, last_c, MIN_DEPTH - TASK_SPLIT_DEPTH);
 }
 
 struct ResultMsg {

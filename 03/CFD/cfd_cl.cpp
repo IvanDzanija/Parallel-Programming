@@ -1,3 +1,5 @@
+// clang++ -march=native -O3 -framework OpenCL cfd_cl.cpp arraymalloc.cpp boundary.cpp
+// cfdio.cpp jacobi.cpp && ./a.out 128 1000
 #define CL_USE_DEPRECATED_OPENCL_1_1_APIS
 #define CL_USE_DEPRECATED_OPENCL_1_2_APIS
 
